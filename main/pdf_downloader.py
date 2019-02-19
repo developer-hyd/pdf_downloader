@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------
 # FileName    : pdf_downloader.py
-# Input       : Edit variable <base_url> with url and run this file
+# Input       : List of urls's in main() routine
 # Description : Crawl all links from given url and check
 #               against regex to get relevant pdf links.
 #               Downloaded pdf are store in pdf directory
@@ -17,7 +17,6 @@ import ssl
 logging.basicConfig(level=logging.INFO)
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
 
-base_url = 'https://www.volvogroup.com/'
 headers = {
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 '
                   'Safari/537.11',
@@ -28,11 +27,11 @@ headers = {
     'Connection': 'keep-alive'}
 
 regex = r"(investors|investorrelations|investor-relations)"
-pdf_urls = []
 level = 0
 
 
-def get_pfd_urls(url):
+def get_pfd_urls(url, filtering=False):
+    pdf_urls = []
     try:
         logging.info("Fetching pdf url's for : {}".format(url))
         request = Request(url, headers=headers)
@@ -43,37 +42,50 @@ def get_pfd_urls(url):
         compile_regex = re.compile(regex, re.I)
         if a_tags:
             for a_tag in a_tags:
-                match = compile_regex.search(a_tag['href'])
-                if a_tag['href'].endswith('.pdf') and 'javascript' not in a_tag['href'] and len(
-                        a_tag['href']) > 20 and match is not None:
-                    pdf_urls.append(urllib.parse.urljoin(base_url, a_tag['href']))
-        logging.info("Found {} urls for : {}".format(len(pdf_urls), url))
+                if filtering:
+                    match = compile_regex.search(a_tag['href'])
+                    if a_tag['href'].endswith('.pdf') and 'javascript' not in a_tag['href'] and len(
+                            a_tag['href']) > 20 and match is not None:
+                        pdf_urls.append(urllib.parse.urljoin(url, a_tag['href'].replace(' ', '%20')))
+                else:
+                    if a_tag['href'].endswith('.pdf') and 'javascript' not in a_tag['href'] and len(
+                            a_tag['href']) > 20:
+                        pdf_urls.append(urllib.parse.urljoin(url, a_tag['href'].replace(' ', '%20')))
+        logging.info("PDF download url's found : {}".format(len(pdf_urls)))
+        return pdf_urls
     except Exception as e:
         logging.exception(e)
 
 
 def download_pdf(download_url):
     try:
+        pdf_title = download_url + '.pdf'
         logging.info("PDF download url : {} ".format(download_url))
         logging.info("Downloading pdf ...")
         response = urlopen(download_url, context=ssl_context)
         for title in download_url.split('/'):
             if title.endswith('.pdf'):
-                pdf_title = title
+                pdf_title = title.replace('%20', '-')
         if not os.path.exists('pdf'):
             os.makedirs('pdf')
-        file = open("pdf/{}".format(pdf_title), 'wb')
-        file.write(response.read())
-        file.close()
-        logging.info("Downloaded file : {}".format(title))
+        if int(response.headers['content-length']) > 0 and response.headers['content-type'] == 'application/pdf':
+            file = open("pdf/{}".format(pdf_title), 'wb')
+            file.write(response.read())
+            file.close()
+            logging.info(
+                "Downloaded file : {} || file-size : {} KB".format(pdf_title, response.headers['content-length']))
     except Exception as e:
         logging.exception(e)
 
 
 def main():
-    get_pfd_urls(base_url)
-    for url in pdf_urls:
-        download_pdf(url)
+    urls = ['https://block-x.co/investors',
+
+            ]
+    for url in urls:
+        pdf_urls = get_pfd_urls(url, filtering=False)
+        for pdf_url in pdf_urls:
+            download_pdf(pdf_url)
 
 
 if __name__ == "__main__":
