@@ -18,7 +18,7 @@ import ssl
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Downloader")
 
-ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_1)
+ssl_context = ssl._create_unverified_context()
 
 headers = {
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 '
@@ -36,6 +36,7 @@ level = 0
 def get_pfd_urls(url, filtering=False):
     pdf_urls = []
     try:
+        url = convert_url(url)
         logger.info("Fetching pdf url's for : {}".format(url))
         request = Request(url, headers=headers)
         response = urlopen(request, context=ssl_context)
@@ -54,6 +55,7 @@ def get_pfd_urls(url, filtering=False):
                     if a_tag['href'].endswith('.pdf') and 'javascript' not in a_tag['href'] and len(
                             a_tag['href']) > 20:
                         pdf_urls.append(urllib.parse.urljoin(url, a_tag['href'].replace(' ', '%20')))
+        pdf_urls = list(set(pdf_urls))
         logging.info("PDF download url's found : {}".format(len(pdf_urls)))
         return pdf_urls
     except Exception as e:
@@ -71,7 +73,7 @@ def download_pdf(download_url):
                 pdf_title = title.replace('%20', '-')
         if not os.path.exists('pdf'):
             os.makedirs('pdf')
-        if int(response.headers['content-length']) > 0 and response.headers['content-type'] == 'application/pdf':
+        if int(response.headers['content-length']) > 0 and response.headers['content-type'].count('application/pdf'):
             file = open("pdf/{}".format(pdf_title), 'wb')
             file.write(response.read())
             file.close()
@@ -81,10 +83,37 @@ def download_pdf(download_url):
         logging.exception(e)
 
 
+def convert_url(url):
+    if url.startswith('http://'):
+        return url
+    if url.startswith('https://'):
+        return url
+    if url.startswith('www'):
+        return 'http://' + url
+
+
+# update url list here ....
 def main():
-    urls = ['https://www.volvogroup.com/en-en/investors/reports-and-presentations.html',
-            'https://www.adckcl.com/in/en/aboutus/investorrelations/annualreports/',
-            'https://block-x.co/investors']
+    urls = ['http://www.drdgold.com/investors-and-media',
+            'www.gazauto.gazprom.ru/aktsioneram_i_investoram/informatsiya/Godovye_otchety/',
+            'https://www.investec.com/en_int/welcome-to-investec/about-us/investor-relations/financial-information.html',
+            'http://www.suranatele.com/annual-reports.html',
+            'www.cae.com/investors/financial-reports/',
+            'https://www.sec.gov/Archives/edgar/data/908259/000119312518119206/0001193125-18-119206-index.htm',
+            'investor.telecom.co.nz/phoenix.zhtml?c=91956&p=irol-reportsAnnual',
+            'www.lamsoon.co.th/investor/investor_new_en.php',
+            'http://www.omholdingsltd.com/ir_report.htm',
+            'https://www.borneoaqua.com.my/invest_rel/ann_reports.html',
+            'www.b-sophia.co.jp/IR/irinfo/irmaterial.html',
+            'http://www.refiningnz.com/investor-centre/reports--announcements/annual-reports.aspx',
+            'http://www.accretech.jp/english/ir/library/index.html',
+            'tenplay.com.au/corporate/invest',
+            'www.smcon.co.jp/en/investor/index.html',
+            'www.asahi-kasei.co.jp/asahi/en/ir/library/financial_briefing/',
+            'www.acom.co.jp/corp/english/ir_index.html',
+            'http://www.mcnex.com/page/sub3_02.html',
+            'http://www.cellbiotech.com/en/ir'
+            ]
     for url in urls:
         pdf_urls = get_pfd_urls(url, filtering=False)
         if pdf_urls:
