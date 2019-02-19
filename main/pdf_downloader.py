@@ -14,8 +14,11 @@ import urllib.parse
 import logging
 import ssl
 
+# Logger configurations
 logging.basicConfig(level=logging.INFO)
-ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
+logger = logging.getLogger("Downloader")
+
+ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_1)
 
 headers = {
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 '
@@ -33,7 +36,7 @@ level = 0
 def get_pfd_urls(url, filtering=False):
     pdf_urls = []
     try:
-        logging.info("Fetching pdf url's for : {}".format(url))
+        logger.info("Fetching pdf url's for : {}".format(url))
         request = Request(url, headers=headers)
         response = urlopen(request, context=ssl_context)
         html_text = response.read()
@@ -79,13 +82,14 @@ def download_pdf(download_url):
 
 
 def main():
-    urls = ['https://block-x.co/investors',
-
-            ]
+    urls = ['https://www.volvogroup.com/en-en/investors/reports-and-presentations.html',
+            'https://www.adckcl.com/in/en/aboutus/investorrelations/annualreports/',
+            'https://block-x.co/investors']
     for url in urls:
         pdf_urls = get_pfd_urls(url, filtering=False)
-        for pdf_url in pdf_urls:
-            download_pdf(pdf_url)
+        if pdf_urls:
+            for pdf_url in pdf_urls:
+                download_pdf(pdf_url)
 
 
 if __name__ == "__main__":
