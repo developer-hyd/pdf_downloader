@@ -1,2 +1,5 @@
 /venv
 /main/pdf
+./idea
+main/__pycache__/
+

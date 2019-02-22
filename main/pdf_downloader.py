@@ -7,8 +7,12 @@
 # -------------------------------------------------------------------
 
 import os
+import sys
 from urllib.request import urlopen, Request
 import re
+import argparse
+
+import xlrd
 from bs4 import BeautifulSoup
 import urllib.parse
 import logging
@@ -32,16 +36,33 @@ headers = {
 regex = r"(investors|investorrelations|investor-relations)"
 level = 0
 
+pdf_types = {'annual': 'AR', 'Corporate': 'AR', 'Transcripts': 'TR', 'Quarterly': 'QR',
+             'Presentations': 'IP', 'Filings': 'FL'}
 
-def get_pfd_urls(url, filtering=False):
+
+def get_pdf_type(text):
+    result = ''
+    for pdf_type in pdf_types.items():
+        if re.search(pdf_type[0], text, re.IGNORECASE):
+            result = pdf_type[1]
+    if result:
+        return result
+    else:
+        return 'OTH'
+
+
+def get_pfd_urls_and_type(url, filtering=False):
     pdf_urls = []
     try:
         url = convert_url(url)
+        logging.info("\n")
         logger.info("Fetching pdf url's for : {}".format(url))
         request = Request(url, headers=headers)
         response = urlopen(request, context=ssl_context)
         html_text = response.read()
         soup = BeautifulSoup(html_text, 'html.parser')
+        title_text = soup.find('title').text
+        doc_type = get_pdf_type(text=title_text)
         a_tags = soup.findAll('a', href=True)
         compile_regex = re.compile(regex, re.I)
         if a_tags:
@@ -56,29 +77,67 @@ def get_pfd_urls(url, filtering=False):
                             a_tag['href']) > 20:
                         pdf_urls.append(urllib.parse.urljoin(url, a_tag['href'].replace(' ', '%20')))
         pdf_urls = list(set(pdf_urls))
-        logging.info("PDF download url's found : {}".format(len(pdf_urls)))
-        return pdf_urls
+        logging.info("PDF download url's found : {}\n".format(len(pdf_urls)))
+        return doc_type, pdf_urls
+    except Exception as e:
+        logging.exception(e)
+        return 'Oth', []
+
+
+def get_pdf_meta(pdf_type, company_name, company_id, download_url):
+    pdf_title = str(company_id) + '_' + str(company_name).replace(' ', '_')
+    if pdf_type and pdf_type == 'OTH':
+        doc_type = get_pdf_type(text=download_url)
+        pdf_title = pdf_title + '_' + doc_type
+    for title in download_url.split('/'):
+        if title.endswith('.pdf'):
+            match = re.match(r'.*([1-3][0-9]{3})', title)
+            if match is not None:
+                year = match.group(1)
+                pdf_title = pdf_title + '_' + year
+            pdf_title = pdf_title + '.pdf'
+    pdf_folder = company_name.replace(' ', '_')
+    return pdf_title, pdf_folder
+
+
+def download_pdf(download_url, pdf_title, pdf_folder):
+    try:
+        logging.info("PDF download url : {} ".format(download_url))
+        logging.info("Downloading pdf ...")
+        response = urlopen(download_url, context=ssl_context)
+        if not os.path.exists('pdf'):
+            os.makedirs('pdf')
+        if not os.path.exists('pdf/{}'.format(pdf_folder)):
+            os.makedirs('pdf/{}'.format(pdf_folder))
+        if int(response.headers['content-length']) > 0 and response.headers['content-type'].count('application/pdf'):
+            file = open("pdf/{}/{}".format(pdf_folder, pdf_title), 'wb')
+            file.write(response.read())
+            file.close()
+            logging.info(
+                "Downloaded PDF Name : {} || PDF-size : {} KB\n".format(pdf_title, response.headers['content-length']))
     except Exception as e:
         logging.exception(e)
 
 
-def download_pdf(download_url):
+# read excel data and parse inputs for pdf extraction url's
+def read_excel(excel_file):
     try:
-        pdf_title = download_url + '.pdf'
-        logging.info("PDF download url : {} ".format(download_url))
-        logging.info("Downloading pdf ...")
-        response = urlopen(download_url, context=ssl_context)
-        for title in download_url.split('/'):
-            if title.endswith('.pdf'):
-                pdf_title = title.replace('%20', '-')
-        if not os.path.exists('pdf'):
-            os.makedirs('pdf')
-        if int(response.headers['content-length']) > 0 and response.headers['content-type'].count('application/pdf'):
-            file = open("pdf/{}".format(pdf_title), 'wb')
-            file.write(response.read())
-            file.close()
-            logging.info(
-                "Downloaded file : {} || file-size : {} KB".format(pdf_title, response.headers['content-length']))
+        rows = []
+        header_list = []
+        links_data = []
+        wb = xlrd.open_workbook(excel_file)
+        sheet = wb.sheet_by_index(0)
+        logging.info("Reading file-name: {} || sheet-name: {}\n".format(excel_file, sheet.name))
+        col = sheet.row(0)
+
+        for header in col:
+            header_list.append(header.value)
+        for index in range(sheet.nrows):
+            if not index == 0:
+                rows.append(sheet.row_values(index))
+        for row in rows:
+            links_data.append(dict(zip(header_list, row)))
+        return links_data
     except Exception as e:
         logging.exception(e)
 
@@ -90,36 +149,23 @@ def convert_url(url):
         return url
     if url.startswith('www'):
         return 'http://' + url
+    else:
+        return 'http://' + url
 
 
-# update url list here ....
-def main():
-    urls = ['http://www.drdgold.com/investors-and-media',
-            'www.gazauto.gazprom.ru/aktsioneram_i_investoram/informatsiya/Godovye_otchety/',
-            'https://www.investec.com/en_int/welcome-to-investec/about-us/investor-relations/financial-information.html',
-            'http://www.suranatele.com/annual-reports.html',
-            'www.cae.com/investors/financial-reports/',
-            'https://www.sec.gov/Archives/edgar/data/908259/000119312518119206/0001193125-18-119206-index.htm',
-            'investor.telecom.co.nz/phoenix.zhtml?c=91956&p=irol-reportsAnnual',
-            'www.lamsoon.co.th/investor/investor_new_en.php',
-            'http://www.omholdingsltd.com/ir_report.htm',
-            'https://www.borneoaqua.com.my/invest_rel/ann_reports.html',
-            'www.b-sophia.co.jp/IR/irinfo/irmaterial.html',
-            'http://www.refiningnz.com/investor-centre/reports--announcements/annual-reports.aspx',
-            'http://www.accretech.jp/english/ir/library/index.html',
-            'tenplay.com.au/corporate/invest',
-            'www.smcon.co.jp/en/investor/index.html',
-            'www.asahi-kasei.co.jp/asahi/en/ir/library/financial_briefing/',
-            'www.acom.co.jp/corp/english/ir_index.html',
-            'http://www.mcnex.com/page/sub3_02.html',
-            'http://www.cellbiotech.com/en/ir'
-            ]
-    for url in urls:
-        pdf_urls = get_pfd_urls(url, filtering=False)
-        if pdf_urls:
-            for pdf_url in pdf_urls:
-                download_pdf(pdf_url)
+def main(excel_file):
+    try:
+        input_data = read_excel(excel_file)
+        for data in input_data:
+            pdf_type, pdf_urls = get_pfd_urls_and_type(url=data['FilingsLink'], filtering=False)
 
+            if len(pdf_urls):
+                for pdf_url in pdf_urls:
+                    pdf_title, pdf_folder = get_pdf_meta(pdf_type=pdf_type, company_name=data['CompanyName'],
+                                                         company_id=str(data['CompanyId']).rstrip('0').rstrip('.'),
+                                                         download_url=pdf_url)
+                    download_pdf(download_url=pdf_url, pdf_title=pdf_title, pdf_folder=pdf_folder)
 
-if __name__ == "__main__":
-    main()
+    except Exception as e:
+        logging.exception(e)
+
