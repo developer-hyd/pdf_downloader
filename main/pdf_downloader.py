@@ -7,10 +7,8 @@
 # -------------------------------------------------------------------
 
 import os
-import sys
 from urllib.request import urlopen, Request
 import re
-import argparse
 
 import xlrd
 from bs4 import BeautifulSoup
