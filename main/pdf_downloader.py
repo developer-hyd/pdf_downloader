@@ -82,19 +82,25 @@ def get_pfd_urls_and_type(url, filtering=False):
         return 'Oth', []
 
 
+# Rollback to previous version (without pdf type evaluation)
 def get_pdf_meta(pdf_type, company_name, company_id, download_url):
-    pdf_title = str(company_id) + '_' + str(company_name).replace(' ', '_')
-    if pdf_type and pdf_type == 'OTH':
-        doc_type = get_pdf_type(text=download_url)
-        pdf_title = pdf_title + '_' + doc_type
+    # pdf_title = str(company_id) + '_' + str(company_name).replace(' ', '_')
+    pdf_title = str(company_id)
     for title in download_url.split('/'):
         if title.endswith('.pdf'):
-            match = re.match(r'.*([1-3][0-9]{3})', title)
-            if match is not None:
-                year = match.group(1)
-                pdf_title = pdf_title + '_' + year
-            pdf_title = pdf_title + '.pdf'
-    pdf_folder = company_name.replace(' ', '_')
+            pdf_title = pdf_title + '_' + title.replace('%20', '_')
+    # if pdf_type and pdf_type == 'OTH':
+    #     doc_type = get_pdf_type(text=download_url)
+    #     pdf_title = pdf_title + '_' + doc_type
+    # for title in download_url.split('/'):
+    #     if title.endswith('.pdf'):
+    #         match = re.match(r'.*([1-3][0-9]{3})', title)
+    #         if match is not None:
+    #             year = match.group(1)
+    #             pdf_title = pdf_title + '_' + year
+    #         pdf_title = pdf_title + '.pdf'
+    # pdf_folder = company_name.replace(' ', '_')
+    pdf_folder = str(company_id) + '_' + company_name.replace(' ', '_')
     return pdf_title, pdf_folder
 
 
@@ -166,4 +172,3 @@ def main(excel_file):
 
     except Exception as e:
         logging.exception(e)
-
