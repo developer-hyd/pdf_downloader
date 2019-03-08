@@ -7,6 +7,7 @@
 # -----------------------------------------------------------------------------
 # System imports
 # -----------------------------------------------------------------------------
+import os
 import sys
 import argparse
 import pdf_downloader as pd
@@ -16,11 +17,12 @@ import pdf_downloader as pd
 # -----------------------------------------------------------------------------
 
 APP_NAME = u"PDF Downloader"
-APP_RELEASE = 2.2
+APP_RELEASE = 3.3
 APP_COPYRIGHT = u"GlobalData"
 APP_YEAR = 2019
 
 excel_file = None
+level = 0
 
 
 # -----------------------------------------------------------------------------
@@ -92,8 +94,8 @@ def app_help():
 # Run the app
 # -----------------------------------------------------------------------------
 def run():
-    if excel_file:
-        pd.main(excel_file)
+    if os.path.isfile(excel_file):
+        pd.main(excel_file, level)
 
 
 # -----------------------------------------------------------------------------
@@ -101,7 +103,11 @@ def run():
 # -----------------------------------------------------------------------------
 def init_system(app_args):
     global excel_file
-
+    global level
+    if app_args.level:
+        level = app_args.level
+    else:
+        print("missing level input")
     if app_args.excel_file:
         excel_file = app_args.excel_file
     else:
@@ -122,6 +128,8 @@ def close_system():
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--excel_file', help='Provide excel file as input parameter')
+    parser.add_argument('--level', help='Provide excel file as input parameter')
+
     app_args = parser.parse_args()
     return app_args
 
